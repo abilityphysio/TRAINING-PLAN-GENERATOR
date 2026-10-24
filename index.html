@@ -29,7 +29,7 @@ var ENDPOINT="https://script.google.com/macros/s/AKfycbyuL1XanKshcx7EqJu7HPHCsRZ
 var TOKEN="DEADLIFT IS A LIFE SAVER";   // must match Code.gs
 var DN=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var TYPES=['Easy','Recovery','Interval','Tempo','Long Run','Run'],LEN={Easy:5,Recovery:3,Interval:5,Tempo:5,'Long Run':10,Run:5};
-var LB=['NIL','RUN','RUN-WALK','WALK','SW','RIDE','SWIM'],SWF=['FULL BODY','LOWER BODY','UPPER BODY','CORE','UPPER BODY + CORE','LOWER BODY + CORE','UPPER BODY + LOWER BODY'];
+var LB=['NIL','RUN','WALK','SW','RIDE','SWIM'],SWF=['FULL BODY','LOWER BODY','UPPER BODY','CORE','UPPER BODY + CORE','LOWER BODY + CORE','UPPER BODY + LOWER BODY'];
 function mm(m){var s=Math.round(m*60),a=Math.floor(s/60),b=s%60;return a+':'+(b<10?'0':'')+b}
 function hms(m){var s=Math.round(m*60),h=Math.floor(s/3600),r=s%3600,i=Math.floor(r/60),c=r%60;return(h?h+':':'')+((h&&i<10)?'0':'')+i+':'+(c<10?'0':'')+c}
 function pace(s){s=(s||'').trim();if(!s)return null;var a=s.split(':'),v=(+a[0])+((+a[1])||0)/60;return isNaN(v)||v<=0?null:v}
@@ -39,20 +39,22 @@ function fR(r){return r.lo===r.hi?mm(r.lo):mm(r.lo)+'-'+mm(r.hi)}
 function parseP(s){s=(s||'').replace(/[\u2013\u2014]/g,'-').trim();if(!s)return null;var a=s.split('-'),lo=pace(a[0]),hi=a.length>1?pace(a[1]):lo;if(!lo||!hi)return null;if(lo>hi){var t=lo;lo=hi;hi=t}return{lo:lo,hi:hi}}
 function prng(v,c){if(v==='auto')return null;if(v==='custom')return parseP(c);var a=String(v).split('-');return{lo:+a[0],hi:+a[1]}}
 function mkS(mode,type){var len=type?LEN[type]:5;return{t:'',mode:mode,type:type,unit:'km',len:len,oth:Math.round(len*7.5),pace:'auto',pc:'',seg:'Distance',run:900,walk:100,reps:6,wp:'10-10',wc:'',wu:mode!=='Walk',wuV:mode==='Run'?15:10,wuT:'Jog',cd:mode!=='Walk',cdV:mode==='Run'?10:5,cdT:'Walk',iN:6,iV:400,iU:'m',iP:'',rV:200,rU:'m',rT:'Jog',tV:20,tU:'min',tP:'',ovr:null,style:'Even'}}
-function mkStep(){return{kind:'Continuous',len:5,unit:'km',pace:'auto',pc:'',iN:6,iV:400,iU:'m',rV:200,rU:'m',rT:'Jog'}}
-function mkBlock(){return{seg:'Distance',run:900,walk:100,reps:6,pace:'auto',pc:'',wp:'10-10',wc:''}}
-function mkA(t){var s;if(t==='RUN'){s=mkS('Run','Easy');s.steps=[mkStep()]}else if(t==='RUN-WALK'){s=mkS('Run-Walk','Easy');s.blocks=[mkBlock()]}else if(t==='WALK')s=mkS('Walk','');
+function mkPart(){return{reps:1,len:5,unit:'km',pace:'auto',pc:'',rV:200,rU:'m',rT:'Jog',rp:'auto',rpc:''}}
+function mkA(t){var s;if(t==='RUN'){s=mkS('Run','');s.parts=[mkPart()]}else if(t==='WALK')s=mkS('Walk','');
  else return{SW:{t:'SW',focus:'FULL BODY'},RIDE:{t:'RIDE',type:'Easy',len:20,unit:'km'},SWIM:{t:'SWIM',len:1000,unit:'m'},NIL:{t:'NIL'}}[t];s.t=t;return s}
+function mkRace(){var r=mkA('RUN');r.len=10;r.oth=75;r.style='Even';return r}
 function newWeek(){return{days:DN.map(function(n){return{n:n,link:null,AM:[mkA('NIL')],PM:null}})}}
 var S;
-function fresh(){S={ptype:'Weekly plan',name:'',phone:'',email:'',start:'',showDates:true,tab:'s',cur:0,sel:0,weeks:[newWeek()],race:mkS('Run',''),out:null,hdr:'Your name or clinic',subj:'Your training plan',body:'',startDay:0,cc:false,prog:0,dup:[],status:''};S.race.len=10;S.race.oth=75}
-fresh();try{var sv=localStorage.getItem('rp4');if(sv)S=JSON.parse(sv)}catch(e){}
+function fresh(){S={ptype:'Weekly plan',name:'',phone:'',email:'',start:'',showDates:true,tab:'s',cur:0,sel:0,weeks:[newWeek()],race:mkRace(),out:null,hdr:'Ability Physiotherapy & Sports Injury Clinic',subj:'Your training plan',body:'',cc:false,prog:0,dup:[],status:''};S.race.len=10;S.race.oth=75}
+fresh();try{var sv=localStorage.getItem('rp6');if(sv)S=JSON.parse(sv)}catch(e){}
+if(!S.race||!S.race.parts)S.race=mkRace();
+if(!S.hdr||S.hdr==='Your name or clinic')S.hdr='Ability Physiotherapy & Sports Injury Clinic';
 var CX='',DIS='',CXS={sl:'',i:0},armed=false;
 function eff(wi,di){var w=S.weeks[wi],d=w.days[di];while(d.link!==null)d=w.days[d.link];return d}
-function SD(){if(S.start){var p=S.start.split('-');return(new Date(+p[0],+p[1]-1,+p[2]).getDay()+6)%7}return S.startDay||0}
-function vis(wi,di){return wi>0||di>=SD()}
-function fd(wi){return wi===0?SD():0}
-function lab(wi,day){if(!S.start||!S.showDates)return day;var p=S.start.split('-'),b=new Date(+p[0],+p[1]-1,+p[2]),d=new Date(b.getFullYear(),b.getMonth(),b.getDate()-SD()+7*wi+DN.indexOf(day));return day+' '+d.getDate()+' '+MN[d.getMonth()]}
+function ord(n){var q=['th','st','nd','rd'],v=n%100;return n+(q[(v-20)%10]||q[v]||q[0])}
+var DFULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],MFULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function startLine(){if(!S.start)return'';var p=S.start.split('-'),d=new Date(+p[0],+p[1]-1,+p[2]);return'Plan starts from '+DFULL[d.getDay()]+' '+ord(d.getDate())+' '+MFULL[d.getMonth()]+' '+d.getFullYear()}
+function lab(wi,day){if(!S.start||!S.showDates)return day;var p=S.start.split('-'),b=new Date(+p[0],+p[1]-1,+p[2]),d=new Date(b.getFullYear(),b.getMonth(),b.getDate()-((b.getDay()+6)%7)+7*wi+DN.indexOf(day));return day+' '+d.getDate()+' '+MN[d.getMonth()]}
 function rw(s){var D=s.unit==='km'?s.len:s.oth,T=s.unit==='min'?s.len:s.oth,wr=prng(s.wp,s.wc)||{lo:10,hi:10},rr=prng(s.pace,s.pc),wm=(wr.lo+wr.hi)/2,dm=s.seg==='Distance',N,cd,ct,rd,wd,rt,wt,o={wr:wr,rr:rr};
  if(dm){rd=s.run/1000;wd=s.walk/1000;cd=rd+wd;N=Math.max(1,Math.round(D/cd))}else{rt=s.run;wt=s.walk/60;ct=rt+wt;N=Math.max(1,Math.round(T/ct))}
  o.N=N;
@@ -63,7 +65,9 @@ function rw(s){var D=s.unit==='km'?s.len:s.oth,T=s.unit==='min'?s.len:s.oth,wr=p
 function rwT(s,o,half){var dm=s.seg==='Distance',rp=o.rr?fR(o.rr):mm(o.rp+(half===1?5/60:half===2?-5/60:0));
  return 'Run '+s.run+(dm?' m':' min')+' at '+rp+'/km / Walk '+s.walk+(dm?' m':' sec')+' at '+fR(o.wr)+'/km x '+(half===1?Math.ceil(o.N/2):half===2?Math.floor(o.N/2):o.N)}
 function tail(s,o){if(!o.rr)return'('+km(o.D)+' km in '+hms(o.T)+')';return s.seg==='Distance'?'('+km(o.D)+' km, '+hms(o.tl)+'-'+hms(o.th)+')':'('+hms(o.T)+', '+km(o.dl)+'-'+km(o.dh)+' km)'}
-function netT(s,r){var same=Math.abs(r.lo-r.hi)<1e-9;if(s.unit==='km')return s.len+' km in '+(same?hms(s.len*r.lo):hms(s.len*r.lo)+'-'+hms(s.len*r.hi));return 'about '+(same?km(s.len/r.lo):km(s.len/r.hi)+'-'+km(s.len/r.lo))+' km in '+s.len+' min'}
+function netT(s,r){var same=Math.abs(r.lo-r.hi)<1e-9,u=s.unit;
+ if(u==='km'||u==='m'){var L=u==='m'?s.len/1000:s.len;return s.len+' '+u+' in '+(same?hms(L*r.lo):hms(L*r.lo)+'-'+hms(L*r.hi))}
+ var M=u==='sec'?s.len/60:s.len;return'about '+(same?km(M/r.lo):km(M/r.hi)+'-'+km(M/r.lo))+' km in '+s.len+' '+u}
 function rngT(a,b){return Math.abs(a-b)<1e-9?hms(a):hms(a)+'-'+hms(b)}
 function rngD(a,b){return Math.abs(a-b)<1e-9?km(a):km(a)+'-'+km(b)}
 function rwA(s){var wr=prng(s.wp,s.wc)||{lo:10,hi:10},rr=prng(s.pace,s.pc),N=Math.max(1,s.reps==null?6:+s.reps||1),dm=s.seg==='Distance',o={wr:wr,rr:rr,N:N},rd,wd,rt,wt;
@@ -72,41 +76,52 @@ function rwA(s){var wr=prng(s.wp,s.wc)||{lo:10,hi:10},rr=prng(s.pace,s.pc),N=Mat
  o.ok=!rr||rr.hi<wr.lo;return o}
 function rwNet(s,o){if(s.seg==='Distance')return o.rr?km(o.D)+' km in '+rngT(o.tl,o.th):km(o.D)+' km';return o.rr?hms(o.T)+', '+rngD(o.dl,o.dh)+' km':hms(o.T)}
 function rwAT(s,o){var dm=s.seg==='Distance';return 'Run '+s.run+(dm?' m':' min')+(o.rr?' at '+fR(o.rr)+'/km':'')+' / Walk '+s.walk+(dm?' m':' sec')+(o.rr?' at '+fR(o.wr)+'/km':'')+' x '+o.N+' (net '+rwNet(s,o)+')'}
-function blocksNet(s){var Dl=0,Dh=0,Tl=0,Th=0,dOk=true,tOk=true,x=[];
- s.blocks.forEach(function(b){var o=rwA(b);if(b.seg==='Distance'){Dl+=o.D;Dh+=o.D;if(o.rr){Tl+=o.tl;Th+=o.th}else tOk=false}else{Tl+=o.T;Th+=o.T;if(o.rr){Dl+=o.dl;Dh+=o.dh}else dOk=false}});
- if(dOk)x.push(rngD(Dl,Dh)+' km');if(tOk)x.push(rngT(Tl,Th));return x.join(' in ')}
-function parts(s){var h=s.mode==='Walk'?'Walk':s.mode+(s.type?', '+s.type:''),lines=[];
+function segTD(len,unit,r){var o={};if(unit==='m'||unit==='km'){var D=unit==='m'?len/1000:len;o.Dl=o.Dh=D;if(r){o.Tl=D*r.lo;o.Th=D*r.hi}}else{var T=unit==='sec'?len/60:len;o.Tl=o.Th=T;if(r){o.Dl=T/r.hi;o.Dh=T/r.lo}}return o}
+function prA(p,c,s){if(p==='auto')return(s===S.race&&s.autoRp)?{lo:s.autoRp,hi:s.autoRp}:null;return prng(p,c)}
+function totals(s){var t={Dl:0,Dh:0,Tl:0,Th:0,dOk:true,tOk:true};
+ s.parts.forEach(function(pt){var n=Math.max(1,Math.round(+pt.reps||1)),g=[[pt.len,pt.unit,prA(pt.pace,pt.pc,s)]];if(n>1)g.push([pt.rV,pt.rU,prng(pt.rp,pt.rpc)]);
+  g.forEach(function(x){var o=segTD(+x[0]||0,x[1],x[2]);if(o.Dl==null)t.dOk=false;else{t.Dl+=n*o.Dl;t.Dh+=n*o.Dh}if(o.Tl==null)t.tOk=false;else{t.Tl+=n*o.Tl;t.Th+=n*o.Th}})});return t}
+function netStr(t){var x=[];if(t.dOk)x.push(rngD(t.Dl,t.Dh)+' km');if(t.tOk)x.push(rngT(t.Tl,t.Th));return x.join(' in ')}
+function solveAuto(s){if(!s.parts.some(function(pt){return pt.pace==='auto'}))return null;
+ var tg=s.len/s.oth,lo=1,hi=30,i;
+ function sp(rp){s.autoRp=rp;var t=totals(s);if(!t.dOk||!t.tOk)return null;return((t.Dl+t.Dh)/2)/((t.Tl+t.Th)/2)}
+ var a=sp(lo),b=sp(hi);s.autoRp=null;if(a==null||b==null||a<tg||b>tg)return null;
+ for(i=0;i<50;i++){var m=(lo+hi)/2,v=sp(m);if(v>tg)lo=m;else hi=m}
+ s.autoRp=null;return(lo+hi)/2}
+function parts(s){var h=s.mode==='Walk'?'Walk':'Run'+(s.type?', '+s.type:''),lines=[];
  if(s.mode==='Walk'){var r0=prng(s.pace,s.pc);lines.push(s.len+' '+s.unit+(r0?' at '+fR(r0)+'/km (net '+netT(s,r0)+')':''))}
- else if(s.mode==='Run'){var n=s.steps.length;s.steps.forEach(function(st,i){var r=prng(st.pace,st.pc),pt=r?' at '+fR(r)+'/km':'',tx;
-   if(st.kind==='Interval')tx=st.iN+' x '+st.iV+' '+st.iU+pt+', rec '+st.rV+' '+st.rU+' '+String(st.rT).toLowerCase();
-   else tx=st.len+' '+st.unit+pt+(r?' (net '+netT(st,r)+')':'');
-   lines.push((n>1?'Step '+(i+1)+': ':'')+tx)})}
- else{var ok=true;s.blocks.forEach(function(b,i){var o=rwA(b),dm=b.seg==='Distance';if(!o.ok)ok=false;lines.push((i?'+ ':'')+'(Run '+b.run+(dm?' m':' min')+(o.rr?' at '+fR(o.rr)+'/km':'')+' / Walk '+b.walk+(dm?' m':' sec')+(o.rr?' at '+fR(o.wr)+'/km':'')+') x '+o.N)});
-  if(!ok)lines=['(run pace must be faster than walk pace)'];else{var nt=blocksNet(s);if(nt)lines.push('Net: '+nt)}}
+ else{s.autoRp=(s===S.race)?solveAuto(s):null;var np=s.parts.length,multi=np>1;
+  s.parts.forEach(function(pt,i){var r=prA(pt.pace,pt.pc,s),n=Math.max(1,Math.round(+pt.reps||1)),pp=r?' at '+fR(r)+'/km':'',wk=pt.rT==='Walk',rr=prng(pt.rp,pt.rpc),rt=rr?' at '+fR(rr)+'/km':'',tx;
+   if(n>1){multi=true;tx=wk?'(Run '+pt.len+' '+pt.unit+pp+' / Walk '+pt.rV+' '+pt.rU+rt+') x '+n:n+' x '+pt.len+' '+pt.unit+pp+', rec '+pt.rV+' '+pt.rU+' jog'+rt}
+   else tx=pt.len+' '+pt.unit+pp+(r?' (net '+netT({len:pt.len,unit:pt.unit},r)+')':'');
+   lines.push((np>1?'Step '+(i+1)+': ':'')+tx)});
+  if(multi){var nt=netStr(totals(s));if(nt)lines.push('Net: '+nt)}}
  return{h:h,lines:lines,d:lines.join(' | '),wu:s.wu&&s.mode!=='Walk'?'Warm up : '+s.wuV+' min '+(s.wuT||'Jog').toLowerCase():'',cd:s.cd&&s.mode!=='Walk'?'Cool down : '+s.cdV+' min '+(s.cdT||'Walk').toLowerCase():''}}
-function ap(a){var t=a.t;if(t==='RUN'||t==='RUN-WALK'||t==='WALK')return parts(a);
+function ap(a){var t=a.t;if(t==='RUN'||t==='WALK')return parts(a);
  if(t==='SW')return{h:'SW',lines:[a.focus],d:a.focus,wu:'',cd:''};
  var x=a.len+' '+a.unit;if(t==='RIDE')return{h:'Ride, '+a.type,lines:[x],d:x,wu:'',cd:''};return{h:'Swim',lines:[x],d:x,wu:'',cd:''}}
 function slotT(s){return s?s.filter(function(a){return a.t!=='NIL'}).map(function(a){var p=ap(a);return p.h+': '+(a.ovr!=null?a.ovr:p.d).slice(0,30)}).join(' + '):''}
-function raceP(){var s=S.race,D=s.len,T=s.oth,neg=s.style==='Negative',avg=T/D,L=[],sp=[],n=Math.ceil(D),cum=0,i;
- if(s.mode==='Run-Walk'){var o=rw(s);if(neg){L.push('First half: '+rwT(s,o,1));L.push('Second half: '+rwT(s,o,2))}else L.push(rwT(s,o,0)+', repeat')}
- L.push((neg?'Negative split, 5 s/km slower then 5 s/km faster. ':'Even pace. ')+'Average '+mm(avg)+'/km');
- for(i=1;i<=n;i++){var len=Math.min(1,D-(i-1)),p=avg+(neg?(i<=n/2?1:-1)*5/60:0);cum+=len*p;sp.push([len<1?Math.round(len*1000)+' m':'KM '+i,mm(len*p),hms(cum)])}
- return{race:true,title:'Race day: '+D+' km, goal '+hms(T),lines:L,splits:sp}}
+function raceP(){var s=S.race,D=s.len,T=s.oth,neg=s.style==='Negative',avg=T/D,sp=[],n=Math.ceil(D),cum=0,i,p=parts(s),L=[];
+ for(i=1;i<=n;i++){var len=Math.min(1,D-(i-1)),q=avg+(neg?(i<=n/2?1:-1)*5/60:0);cum+=len*q;sp.push([len<1?Math.round(len*1000)+' m':'KM '+i,mm(len*q),hms(cum)])}
+ if(s.autoRp)L.push('Run pace solved from your goal time: '+mm(s.autoRp)+'/km');
+ L.push((neg?'Negative split: first half 5 s/km slower, second half 5 s/km faster. ':'Even pace. ')+'Average '+mm(avg)+'/km');
+ return{race:true,title:'Race day: '+D+' km, goal '+hms(T),head:p.h,wu:p.wu,plan:p.lines,cd:p.cd,lines:L,splits:sp}}
 function plan(){if(S.ptype==='Race day')return raceP();
- var out=S.weeks.map(function(w,wi){return{title:'Week '+(wi+1)+' of '+S.weeks.length+(wi===0&&SD()>0?' ('+DN[SD()]+' to Sun)':''),rows:w.days.map(function(d,di){var e=eff(wi,di),acts=[];
-  ['AM','PM'].forEach(function(sl){var ls=(e[sl]||[]).filter(function(a){return a.t!=='NIL'});ls.forEach(function(a,k){var p=ap(a);acts.push({sl:sl,lab:ls.length>1?'Activity '+(k+1)+' of '+ls.length:'Activity',name:p.h,lines:a.ovr!=null?[a.ovr]:p.lines,wu:p.wu,cd:p.cd})})});return{di:di,label:lab(wi,d.n),acts:acts}}).filter(function(r){return vis(wi,r.di)})}});
+ var out=S.weeks.map(function(w,wi){return{title:'Week '+(wi+1)+' of '+S.weeks.length,rows:w.days.map(function(d,di){var e=eff(wi,di),acts=[];
+  ['AM','PM'].forEach(function(sl){var ls=(e[sl]||[]).filter(function(a){return a.t!=='NIL'});ls.forEach(function(a,k){var p=ap(a);acts.push({sl:sl,lab:ls.length>1?'Activity '+(k+1)+' of '+ls.length:'Activity',name:p.h,lines:a.ovr!=null?[a.ovr]:p.lines,wu:p.wu,cd:p.cd})})});return{di:di,label:lab(wi,d.n),acts:acts}})}});
  out.forEach(function(w,i){w.sig=JSON.stringify(w.rows.map(function(r){return r.acts}));for(var j=0;j<i;j++){if(!out[j].same&&out[j].sig===w.sig){w.same=j+1;break}}});return out}
 function msgText(P){var L=['Hi, here is your '+(P.race?'race plan':'plan')+':',''];
- if(P.race){L.push('*'+P.title+'*');P.lines.forEach(function(x){L.push(x)});L.push('','*Splits (km | split | total)*');P.splits.forEach(function(r){L.push(r.join(' | '))});return L.join('\n')}
+ if(P.race){L.push('*'+P.title+'*');L.push('_'+P.head+'_');if(P.wu)L.push(P.wu);P.plan.forEach(function(x){L.push(x)});if(P.cd)L.push(P.cd);P.lines.forEach(function(x){L.push(x)});L.push('','*Splits (km | split | total)*');P.splits.forEach(function(r){L.push(r.join(' | '))});return L.join('\n')}
+ if(startLine()){L.push('*'+startLine()+'*');L.push('')}
  P.forEach(function(w){L.push('*'+w.title+'*');L.push('');if(w.same){L.push('Repeat Week '+w.same+' as it is (same sessions on the same days).');L.push('');return}
-  w.rows.forEach(function(r,ri){if(ri>0){L.push('──────────────');L.push('')}if(!r.acts.length){L.push('*'+r.label+'* NIL');L.push('');return}
+  w.rows.forEach(function(r,ri){if(ri>0)L.push('──────────────');if(!r.acts.length){L.push('*'+r.label+'* NIL');return}
    L.push('*'+r.label+'*');var last='';
    r.acts.forEach(function(a){if(a.sl!==last){if(last)L.push('');L.push('```'+a.sl+' SESSION```');last=a.sl}else L.push('');
     L.push('_'+a.lab+': '+a.name+'_');if(a.wu)L.push(a.wu);a.lines.forEach(function(x){L.push(x)});if(a.cd)L.push(a.cd)});
-   L.push('')})});return L.join('\n').trim()}
+   });L.push('')});return L.join('\n').trim()}
 function pdfH(P){var h='<div style="color:#666">'+esc(S.hdr)+'</div><div style="font-size:16px;font-weight:600;margin:2px 0 8px">Training plan'+'</div>';
- if(P.race){h+='<b>'+esc(P.title)+'</b><p>'+P.lines.map(esc).join('<br>')+'</p><table><tr><th>KM</th><th>Split</th><th>Total</th></tr>'+P.splits.map(function(r){return'<tr><td>'+r.join('</td><td>')+'</td></tr>'}).join('')+'</table>';return h}
+ if(P.race){h+='<b>'+esc(P.title)+'</b><p><i>'+esc(P.head)+'</i><br>'+(P.wu?esc(P.wu)+'<br>':'')+P.plan.map(esc).join('<br>')+(P.cd?'<br>'+esc(P.cd):'')+'<br>'+P.lines.map(esc).join('<br>')+'</p><table><tr><th>KM</th><th>Split</th><th>Total</th></tr>'+P.splits.map(function(r){return'<tr><td>'+r.join('</td><td>')+'</td></tr>'}).join('')+'</table>';return h}
+ if(startLine())h+='<p><b>'+esc(startLine())+'</b></p>';
  P.forEach(function(w){if(w.same){h+='<b>'+w.title+'</b><p>Repeat Week '+w.same+' as it is (same sessions on the same days).</p>';return}h+='<b>'+w.title+'</b><table><tr><th>Day</th><th>Session</th><th>Details</th></tr>'+w.rows.map(function(r){if(!r.acts.length)return'<tr><td>'+esc(r.label)+'</td><td colspan="2">NIL</td></tr>';
   return r.acts.map(function(a,i){return'<tr><td>'+(i?'':esc(r.label))+'</td><td>'+'<b>'+a.sl+' SESSION</b><br><i>'+esc(a.lab+': '+a.name)+'</i></td><td>'+(a.wu?esc(a.wu)+'<br>':'')+a.lines.map(esc).join('<br>')+(a.cd?'<br>'+esc(a.cd):'')+'</td></tr>'}).join('')}).join('')+'</table>'});return h}
 function bub(t){return esc(t).replace(/```([^`]+)```/g,'<code>$1</code>').replace(/\*([^*\n]+)\*/g,'<strong>$1</strong>').replace(/_([^_\n]+)_/g,'<em>$1</em>').replace(/\n/g,'<br>')}
@@ -118,61 +133,55 @@ function ss(k,arr,v,n){return'<select data-s="'+k+'"'+CX+CY+DIS+(n?' data-n="1"'
 var WP=[['10-10','10:00'],['9.5-11','9:30-11:00'],['10-12','10:00-12:00'],['11-13','11:00-13:00'],['custom','Custom']];
 function runR(lbl){var R=[['auto',lbl]],x;for(x=4;x<8;x+=0.5)R.push([x+'-'+(x+0.5),mm(x)+'-'+mm(x+0.5)]);R.push(['custom','Custom']);return R}
 function segOpts(dm){var rl=dm?[400,800,900,1000,1200,1500,1800,2400,3000,3500,4000]:[1,2,3,4,5,6,7,8,9,10],wl=dm?[50,100,150,200]:[30,45,60,75,90,120];return{run:rl.map(function(v){return[v,v+(dm?' m':' min')]}),walk:wl.map(function(v){return[v,v+(dm?' m':' sec')]})}}
-function info(s){
- if(s===S.race){if(s.mode!=='Run-Walk')return'';var o=rw(s);
-  if(!o.rr)return o.ok?'Solved run pace '+mm(o.rp)+'/km over '+o.N+' cycles.':'Check segments and target: the run pace is slower than the walk pace or cannot be reached.';
-  if(!o.ok)return'The run pace range is not faster than the walk pace range.';
-  return s.seg==='Distance'?'Time for '+km(o.D)+' km: '+hms(o.tl)+' - '+hms(o.th)+'.':'Distance in '+hms(o.T)+': '+km(o.dl)+' - '+km(o.dh)+' km.'}
- if(s.mode==='Run-Walk'){var ok=s.blocks.every(function(b){return rwA(b).ok});return ok?'Final outcome: '+blocksNet(s)+'.':'Check: the run pace range must be faster than the walk pace range.'}
- return''}
+function info(s){if(s.mode==='Walk')return'';var m=[],bad=false;
+ s.parts.forEach(function(pt){var w=prA(pt.pace,pt.pc,s),r=prng(pt.rp,pt.rpc);if((+pt.reps||1)>1&&pt.rT==='Walk'&&w&&r&&w.hi>=r.lo)bad=true});
+ if(bad)return'Check: the run pace must be faster than the walk pace.';
+ if(s===S.race){s.autoRp=solveAuto(s);
+  if(s.parts.some(function(pt){return pt.pace==='auto'}))m.push(s.autoRp?'Solved run pace '+mm(s.autoRp)+'/km.':'Cannot solve the run pace yet: every part needs a pace or a distance, for example a walk recovery pace.');
+  var t=totals(s);if(t.dOk){var dm=(t.Dl+t.Dh)/2;if(Math.abs(dm-s.len)>0.05)m.push('Check: your steps add up to '+km(dm)+' km, the race is '+km(s.len)+' km.')}
+  return m.join(' ')}
+ if(s.parts.length>1||s.parts.some(function(pt){return(+pt.reps||1)>1})){var nt=netStr(totals(s));if(nt)m.push('Final outcome: '+nt+'.')}return m.join(' ')}
 function wcHTML(s){return'<div class="g2"><div><label><input type="checkbox" data-s="wu"'+CX+DIS+(s.wu?' checked':'')+'> Warm-up</label><div style="margin-top:4px">'+si('wuV',s.wuV,1)+'</div><div style="margin-top:4px">'+ss('wuT',['Jog','Walk'],s.wuT||'Jog')+'</div></div><div><label><input type="checkbox" data-s="cd"'+CX+DIS+(s.cd?' checked':'')+'> Cool-down</label><div style="margin-top:4px">'+si('cdV',s.cdV,1)+'</div><div style="margin-top:4px">'+ss('cdT',['Jog','Walk'],s.cdT||'Walk')+'</div></div></div><div class="note">minutes</div>'}
-function stepsEd(s){var h='',R=runR('No pace');
- s.steps.forEach(function(st,i){CY=' data-st="'+i+'"';h+='<div class="ac" style="margin:6px 0"><span class="fl">Step '+(i+1)+(i===0&&s.steps.length===1?'':'')+'</span><div class="g2">'+F('Kind',ss('kind',['Continuous','Interval'],st.kind))+'<span></span></div>';
-  if(st.kind==='Interval')h+='<div class="g3">'+F('Reps',si('iN',st.iN,1))+F('Length',si('iV',st.iV,1))+F('Unit',ss('iU',['m','min'],st.iU))+'</div><div class="g3">'+F('Recovery',si('rV',st.rV,1))+F('Rec. unit',ss('rU',['m','min'],st.rU))+F('Rec. type',ss('rT',['Jog','Walk'],st.rT))+'</div>';
-  else h+='<div class="g3">'+F('Length',si('len',st.len,1))+F('Unit',ss('unit',['km','min'],st.unit))+'<span></span></div>';
-  h+='<div class="g2">'+F('Run pace /km',ss('pace',R,st.pace)+(st.pace==='custom'?si('pc',st.pc,0,'placeholder="6:10 or 6:00-6:20"'):''))+'<span></span></div>';
-  if(i===1&&!DIS)h+='<button class="sm" data-a="rmstep:'+CXS.sl+':'+CXS.i+'">Remove Step 2</button>';
+var QW=[['','Quick pick...']].concat([400,800,900,1000,1200,1500,1800,2400,3000,3500,4000].map(function(v){return[v+'|m',v+' m']}),[1,2,3,4,5,6,7,8,9,10].map(function(v){return[v+'|min',v+' min']}));
+var QR=[['','Quick pick...']].concat([50,100,150,200].map(function(v){return[v+'|m',v+' m']}),[30,45,60,75,90,120].map(function(v){return[v+'|sec',v+' sec']}));
+function qp(k,arr){return'<select data-qp="'+k+'"'+CX+CY+DIS+'>'+opt(arr,'')+'</select>'}
+function partsEd(s,race){var h='',R=runR(race?'Auto (from goal time)':'No pace');
+ s.parts.forEach(function(pt,i){CY=' data-pt="'+i+'"';var wk=pt.rT==='Walk',n=(+pt.reps||1)>1;
+  h+='<div class="ac" style="margin:6px 0"><span class="fl">Step '+(i+1)+'</span><div class="g3">'+F('Reps (x)',si('reps',pt.reps,1))+F('Length',si('len',pt.len,1))+F('Unit',ss('unit',['km','m','min','sec'],pt.unit))+'</div><div class="g2">'+F('Quick pick',qp('len',QW))+F('Run pace /km',ss('pace',R,pt.pace)+(pt.pace==='custom'?si('pc',pt.pc,0,'placeholder="6:10 or 6:00-6:20"'):''))+'</div>';
+  if(n)h+='<div class="g3">'+F('Recovery',si('rV',pt.rV,1))+F('Rec. unit',ss('rU',['m','km','min','sec'],pt.rU))+F('Rec. type',ss('rT',['Jog','Walk'],pt.rT))+'</div><div class="g2">'+F('Quick pick',qp('rV',QR))+F('Recovery pace /km',ss('rp',wk?WP:runR('No pace'),pt.rp)+(pt.rp==='custom'?si('rpc',pt.rpc,0,'placeholder="10:30"'):''))+'</div>';
+  else h+='<div class="note">Reps 1 is one continuous run. Reps above 1 adds recovery, which can be a jog or a walk.</div>';
+  if(i>0&&i===s.parts.length-1&&!DIS)h+='<button class="sm" data-a="rmpart:'+CXS.sl+':'+CXS.i+'">Remove Step '+(i+1)+'</button>';
   h+='</div>'});CY='';
- if(s.steps.length<2&&!DIS)h+='<button class="sm" data-a="addstep:'+CXS.sl+':'+CXS.i+'">+ Add Step 2</button>';return h}
-function blocksEd(s){var h='';
- s.blocks.forEach(function(b,i){CY=' data-b="'+i+'"';var o=segOpts(b.seg==='Distance');
-  h+='<div class="ac" style="margin:6px 0"><span class="fl">Combination '+(i+1)+'</span><div class="g3">'+F('Segments by',ss('seg',['Distance','Time'],b.seg))+F('Run',ss('run',o.run,b.run,1))+F('Walk',ss('walk',o.walk,b.walk,1))+'</div><div class="g3">'+F('Repeats (x)',si('reps',b.reps,1))+F('Run pace /km',ss('pace',runR('No pace'),b.pace)+(b.pace==='custom'?si('pc',b.pc,0,'placeholder="6:10"'):''))+F('Walk pace /km',ss('wp',WP,b.wp)+(b.wp==='custom'?si('wc',b.wc,0,'placeholder="10:30"'):''))+'</div>';
-  if(i>0&&!DIS)h+='<button class="sm" data-a="rmblock:'+CXS.sl+':'+CXS.i+':'+i+'">Remove combination '+(i+1)+'</button>';h+='</div>'});CY='';
- if(s.blocks.length<3&&!DIS)h+='<button class="sm" data-a="addblock:'+CXS.sl+':'+CXS.i+'">+ Add another combination</button>';return h}
-function ed(s,race){var rwm=s.mode==='Run-Walk',walk=s.mode==='Walk',h='';
- if(race){var dm=s.seg==='Distance',o=segOpts(dm);
-  h+='<div class="g3">'+F('Mode',ss('mode',['Run','Run-Walk'],s.mode))+F('Distance (km)',si('len',s.len,1))+F('Goal time (min)',si('oth',s.oth,1))+'</div><div class="g2">'+F('Splits',ss('style',['Even','Negative'],s.style))+'<span></span></div>';
-  if(rwm)h+='<div class="g3">'+F('Segments by',ss('seg',['Distance','Time'],s.seg))+F('Run',ss('run',o.run,s.run,1))+F('Walk',ss('walk',o.walk,s.walk,1))+'</div><div class="g2">'+F('Run pace /km',ss('pace',runR('Auto (from target)'),s.pace)+(s.pace==='custom'?si('pc',s.pc,0,'placeholder="6:10"'):''))+F('Walk pace /km',ss('wp',WP,s.wp)+(s.wp==='custom'?si('wc',s.wc,0,'placeholder="10:30"'):''))+'</div>'}
- else{
-  if(!walk){h+=wcHTML(s);h+=F('Type',ss('type',TYPES,s.type))}
-  if(rwm)h+=blocksEd(s);
-  else if(walk)h+='<div class="g3">'+F('Length',si('len',s.len,1))+F('Unit',ss('unit',['km','min'],s.unit))+'<span></span></div><div class="g2">'+F('Walk pace /km',ss('pace',[['auto','No pace']].concat(WP),s.pace)+(s.pace==='custom'?si('pc',s.pc,0,'placeholder="10:30"'):''))+'</div>';
-  else h+=stepsEd(s)}
- var inf=info(s);if(inf)h+='<div class="note'+(/Check|not faster/.test(inf)?' warn':'')+'"><b>'+inf+'</b></div>';
+ if(s.parts.length<3&&!DIS)h+='<button class="sm" data-a="addpart:'+CXS.sl+':'+CXS.i+'">+ Add Step '+(s.parts.length+1)+'</button>';return h}
+function ed(s,race){var walk=s.mode==='Walk',h='';
+ if(race)h+='<div class="g3">'+F('Distance (km)',si('len',s.len,1))+F('Goal time (min)',si('oth',s.oth,1))+F('Splits',ss('style',['Even','Negative'],s.style))+'</div>';
+ if(!walk){h+=wcHTML(s);h+=F('Type',ss('type',[['','None']].concat(TYPES.map(function(t){return[t,t]})),s.type||''))}
+ if(walk)h+='<div class="g3">'+F('Length',si('len',s.len,1))+F('Unit',ss('unit',['km','min'],s.unit))+'<span></span></div><div class="g2">'+F('Walk pace /km',ss('pace',[['auto','No pace']].concat(WP),s.pace)+(s.pace==='custom'?si('pc',s.pc,0,'placeholder="10:30"'):''))+'</div>';
+ else h+=partsEd(s,race);
+ var inf=info(s);if(inf)h+='<div class="note'+(/Check|Cannot/.test(inf)?' warn':'')+'"><b>'+inf+'</b></div>';
  if(!race)h+=F('Wording (editable)','<input data-s="ovr"'+CX+DIS+' value="'+esc(s.ovr!=null?s.ovr:parts(s).d)+'">')+(DIS?'':'<button data-a="rst:'+CXS.sl+':'+CXS.i+'" class="sm">Reset wording</button>');
  return h}
 function actEd(sl,i,a,lk){CX=' data-sl="'+sl+'" data-i="'+i+'"';CY='';DIS=lk?' disabled':'';CXS={sl:sl,i:i};var t=a.t,h='<div class="ac"><select data-lab="1"'+CX+DIS+'>'+opt(LB,t)+'</select>';
- if(t==='RUN'||t==='RUN-WALK'||t==='WALK')h+=ed(a,false);
+ if(t==='RUN'||t==='WALK')h+=ed(a,false);
  else if(t==='SW')h+='<div style="margin-top:8px">'+ss('focus',SWF,a.focus)+'</div>';
  else if(t==='RIDE')h+='<div class="g3" style="margin-bottom:0">'+ss('type',['Easy','Endurance','Tempo','Interval','Long'],a.type)+si('len',a.len,1)+ss('unit',['km','min'],a.unit)+'</div>';
  else if(t==='SWIM')h+='<div class="g2" style="margin-bottom:0">'+si('len',a.len,1)+ss('unit',['m','min'],a.unit)+'</div>';
  if(i===1&&!lk)h+='<button class="sm" data-a="rmact:'+sl+'">Remove this activity</button>';
  CX='';CY='';DIS='';return h+'</div>'}
-function setupT(){var race=S.ptype==='Race day',inFrame=window.top!==window;CX='';DIS='';
+function setupT(){var race=S.ptype==='Race day',inFrame=window.top!==window;CX='';CY='';DIS='';CXS={sl:'',i:0};
  return'<div class="cd">'+F('Contact','<button data-a="pick">Pick from contacts</button>')+(S.name?'<div class="note">Selected: '+esc(S.name)+'</div>':'')+(inFrame?'<div class="note warn">Contact picker does not work inside a preview frame. Use the hosted page in Chrome, or type the details.</div>':'')+'<div class="g2">'+F('Mobile','<input data-k="phone" value="'+esc(S.phone)+'" type="tel">')+F('Email','<input data-k="email" value="'+esc(S.email)+'" type="email">')+'</div></div>'+
  '<div class="cd"><span class="fl">Plan type</span><div class="g2">'+['Weekly plan','Race day'].map(function(p){return'<button data-a="ptype:'+p+'" class="'+(S.ptype===p?'on':'')+'">'+p+'</button>'}).join('')+'</div>'+
- (race?'':'<div class="g2">'+F('Start date (optional)','<input type="date" data-k="start" value="'+esc(S.start)+'">')+F('Show dates in plan','<div class="g2" style="margin:0">'+[['1','Yes'],['0','No']].map(function(o){return'<button data-a="dates:'+o[0]+'" class="'+((S.showDates?'1':'0')===o[0]?'on':'')+'"'+(S.start?'':' disabled')+'>'+o[1]+'</button>'}).join('')+'</div>')+'</div><div class="g2">'+F('Week 1 starts on','<select data-k="startDay" data-n="1"'+(S.start?' disabled':'')+'>'+opt(DN.map(function(n,i){return[i,n]}),SD())+'</select>')+'<span></span></div><div class="note">Week 1 runs from this day to Sunday. Week 2 starts on Monday.'+(S.start?' Set by your start date.':'')+'</div>')+'</div>'+
+ (race?'':'<div class="g2">'+F('Start date (optional)','<input type="date" data-k="start" value="'+esc(S.start)+'">')+F('Show dates in plan','<div class="g2" style="margin:0">'+[['1','Yes'],['0','No']].map(function(o){return'<button data-a="dates:'+o[0]+'" class="'+((S.showDates?'1':'0')===o[0]?'on':'')+'"'+(S.start?'':' disabled')+'>'+o[1]+'</button>'}).join('')+'</div>')+'</div><div class="note">With a start date, the message and PDF say when the plan starts, for example "Plan starts from Friday 23rd October 2026".</div>')+'</div>'+
  (race?'<div class="cd"><b>Race</b>'+ed(S.race,true)+'</div>':'')+'<button data-a="reset">'+(armed?'Tap again to confirm reset':'Reset everything')+'</button>'}
 function dayEditor(w,d,lk,e){var h='<div class="cd" style="margin:0 0 8px;border-color:var(--ac)"><b>'+esc(lab(S.cur,d.n))+'</b>';
  if(lk)h+='<div class="note warn">'+d.n+' is a copy of '+w.days[d.link].n+' and is locked. Edit '+w.days[d.link].n+' to change it.</div><button class="sm" data-a="unlink">Unlink to edit '+d.n+' separately</button>';
  ['AM','PM'].forEach(function(sl){var s=e[sl];if(!s)return;h+='<div style="margin-top:10px"><span class="fl">'+sl+' session</span>'+s.map(function(a,i){return actEd(sl,i,a,lk)}).join('')+(!lk&&s.length<2?'<button class="sm" data-a="addact:'+sl+'">+ Add another activity to '+sl+'</button>':'')+(!lk&&sl==='PM'?'<button class="sm" data-a="rmpm">Remove PM session</button>':'')+'</div>'});
  if(!lk&&!e.PM)h+='<div style="margin-top:10px"><button class="sm" data-a="addpm">+ Add PM session</button></div>';
- if(!lk)h+='<div class="fl" style="margin-top:12px">Duplicate this day to (linked copies, locked)</div><div class="ch">'+w.days.map(function(x,i){return(x===d||!vis(S.cur,i))?'':'<label class="chip"><input type="checkbox" data-d="'+i+'"'+(S.dup.indexOf(i)>-1?' checked':'')+'> '+x.n+'</label>'}).join('')+'</div><button data-a="dup" class="sm">Duplicate</button>';
+ if(!lk)h+='<div class="fl" style="margin-top:12px">Duplicate this day to (linked copies, locked)</div><div class="ch">'+w.days.map(function(x,i){return x===d?'':'<label class="chip"><input type="checkbox" data-d="'+i+'"'+(S.dup.indexOf(i)>-1?' checked':'')+'> '+x.n+'</label>'}).join('')+'</div><button data-a="dup" class="sm">Duplicate</button>';
  return h+'</div>'}
 function weeksT(){var w=S.weeks[S.cur],h='<div class="tabs">';
  S.weeks.forEach(function(x,i){h+='<button data-a="wk:'+i+'" class="'+(i===S.cur?'on':'')+'">Week '+(i+1)+'</button>'});if(S.weeks.length<3)h+='<button data-a="addwk">+ Week</button>';h+='</div>';
- if(S.cur===0&&SD()>0)h+='<div class="note">Week 1 starts on '+DN[SD()]+'. Days before it are not part of the plan.</div>';
- w.days.forEach(function(x,i){if(!vis(S.cur,i))return;var e2=eff(S.cur,i),am=slotT(e2.AM),pm=slotT(e2.PM);h+='<button data-a="sel:'+i+'" class="row'+(i===S.sel?' on':'')+'"><b>'+esc(lab(S.cur,x.n))+'</b>'+(x.link!==null?' &nbsp;copy of '+w.days[x.link].n+' (locked)':'')+'<div class="note" style="margin:0;color:inherit">AM: '+esc(am||'NIL')+(e2.PM?' | PM: '+esc(pm||'NIL'):'')+'</div></button>';if(i===S.sel)h+=dayEditor(w,x,x.link!==null,e2)});
+  w.days.forEach(function(x,i){var e2=eff(S.cur,i),am=slotT(e2.AM),pm=slotT(e2.PM);h+='<button data-a="sel:'+i+'" class="row'+(i===S.sel?' on':'')+'"><b>'+esc(lab(S.cur,x.n))+'</b>'+(x.link!==null?' &nbsp;copy of '+w.days[x.link].n+' (locked)':'')+'<div class="note" style="margin:0;color:inherit">AM: '+esc(am||'NIL')+(e2.PM?' | PM: '+esc(pm||'NIL'):'')+'</div></button>';if(i===S.sel)h+=dayEditor(w,x,x.link!==null,e2)});
  h+='<div class="cd"><b>Copy and build weeks</b>'+F('When copying, change distances by','<select data-k="prog" data-n="1">'+opt([[0,'No change'],[0.05,'+5%'],[0.1,'+10%']],S.prog)+'</select>')+'<div class="g2"><button data-a="cpn"'+(S.cur>=2?' disabled':'')+'>Copy to Week '+(S.cur+2)+'</button><button data-a="cpa"'+(S.cur>=2?' disabled':'')+'>Copy to all later</button><button data-a="nb"'+(S.weeks.length>=3?' disabled':'')+'>New blank week</button><button data-a="rm"'+(S.weeks.length<=1?' disabled':'')+'>Remove Week '+(S.cur+1)+'</button></div><div class="note">'+esc(S.status)+'</div></div>';
  return h}
 function logRow(ch){var d=new Date(),P=plan();return[['Logged at',d.toDateString()+', '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})],['Client',S.name||'(name)'],['Mobile',S.phone||'-'],['Email',S.email||'-'],['Plan',S.ptype+(P.race?'':', '+S.weeks.length+' week(s)')],['Channel',ch],['Message',msgText(P).replace(/\n/g,' ').slice(0,70)+'...']]}
@@ -185,32 +194,31 @@ function pdfDoc(P){return'<html><head><meta charset="utf-8"><style>body{font-fam
 function api(extra){if(ENDPOINT.indexOf('PASTE_')===0)return Promise.reject(new Error('endpoint not set: add your Apps Script URL at the top of the code'));
  var P=plan();return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(Object.assign({token:TOKEN,html:pdfDoc(P),name:S.name,phone:S.phone,email:S.email,plan:S.ptype+(P.race?'':', '+S.weeks.length+' week(s)'),message:(S.out!==null?S.out:msgText(P))},extra))}).then(function(r){return r.json()}).then(function(j){if(!j.ok)throw new Error(j.error||'failed');return j})}
 function dl(b64,name){var bin=atob(b64),u=new Uint8Array(bin.length),i;for(i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
-function cleanHidden(c,wi){if(wi===0)for(var i=0;i<SD();i++)c.days[i]={n:DN[i],link:null,AM:[mkA('NIL')],PM:null};return c}
-function render(){S.sel=Math.min(S.sel,6);if(S.sel>=0&&!vis(S.cur,S.sel))S.sel=fd(S.cur);var race=S.ptype==='Race day';if(race&&S.tab==='w')S.tab='s';
+function render(){S.sel=Math.min(S.sel,6);var race=S.ptype==='Race day';if(race&&S.tab==='w')S.tab='s';
  var h='<div class="tabs">'+[['s','Setup'],['w','Planning'],['o','Output']].map(function(t){return'<button data-a="tab:'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"'+(t[0]==='w'&&race?' disabled':'')+'>'+t[1]+'</button>'}).join('')+'</div>';
- $('app').innerHTML=h+(S.tab==='s'?setupT():S.tab==='w'?weeksT():outT());try{localStorage.setItem('rp4',JSON.stringify(S))}catch(e){}}
+ $('app').innerHTML=h+(S.tab==='s'?setupT():S.tab==='w'?weeksT():outT());try{localStorage.setItem('rp6',JSON.stringify(S))}catch(e){}}
 function cl(o){return JSON.parse(JSON.stringify(o))}
 function copyW(w,f){var c=cl(w);if(f!==1)c.days.forEach(function(d){['AM','PM'].forEach(function(sl){(d[sl]||[]).forEach(function(a){
- if(a.steps)a.steps.forEach(function(st){if(st.kind==='Continuous')st.len=Math.round(st.len*f*2)/2});
- else if(a.blocks)a.blocks.forEach(function(b){b.reps=Math.max(1,Math.round(b.reps*f))});
- else if(a.len!=null&&a.t!=='NIL'&&a.t!=='SW'){var u=a.t==='SWIM'?50:0.5;a.len=Math.round(a.len*f/u)*u}
+ if(a.parts)a.parts.forEach(function(pt){if((+pt.reps||1)<2){var u=pt.unit==='m'?50:0.5;if(pt.unit!=='sec')pt.len=Math.round(pt.len*f/u)*u}});
+ else if(a.len!=null&&a.t!=='NIL'&&a.t!=='SW'){var u2=a.t==='SWIM'?50:0.5;a.len=Math.round(a.len*f/u2)*u2}
  a.ovr=null})})});return c}
 function dayS(){return S.weeks[S.cur].days[S.sel]}
+function actOf(sl,i){return sl?dayS()[sl][+i]:S.race}
 document.addEventListener('change',function(e){var el=e.target,d=el.dataset,v=el.type==='checkbox'?el.checked:(d.n?+el.value:el.value);
  if(d.lab!==undefined){dayS()[d.sl][+d.i]=mkA(el.value);render();return}
  if(d.k!==undefined)S[d.k]=v;
  else if(d.d!==undefined){var i=+d.d,j=S.dup.indexOf(i);if(j>-1)S.dup.splice(j,1);else S.dup.push(i);return}
+ else if(d.qp!==undefined){var s2=d.sl?dayS()[d.sl][+d.i]:S.race,q=el.value.split('|');if(q[0]!==''){var t2=s2.parts[+d.pt];t2[d.qp]=+q[0];t2[d.qp==='len'?'unit':'rU']=q[1];s2.ovr=null}}
  else if(d.s!==undefined){var s=d.sl?dayS()[d.sl][+d.i]:S.race,tg=s;
-  if(d.b!==undefined)tg=s.blocks[+d.b];else if(d.st!==undefined)tg=s.steps[+d.st];
+  if(d.pt!==undefined)tg=s.parts[+d.pt];
   if(d.s==='unit'&&tg===s&&s.t==='WALK'){var t=s.len;s.len=s.oth;s.oth=t}
-  if(d.s==='seg'){tg.run=v==='Distance'?900:4;tg.walk=v==='Distance'?100:60}
-  if(d.s==='type'&&s.steps&&v==='Interval')s.steps[0].kind='Interval';
+  if(d.s==='rT')tg.rp=v==='Walk'?'10-10':'auto';
   tg[d.s]=v;if(d.s!=='ovr')s.ovr=null}
  render()});
 document.addEventListener('input',function(e){if(e.target.dataset.out){S.out=e.target.value;$('bub').innerHTML=bub(S.out)}});
 document.addEventListener('click',async function(e){var b=e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a.split(':'),k=a[0],w=S.weeks[S.cur],j;S.status='';
  if(k==='tab')S.tab=a[1];else if(k==='ptype')S.ptype=a[1];else if(k==='dates')S.showDates=a[1]==='1';
- else if(k==='wk'){S.cur=+a[1];S.sel=fd(S.cur)}
+ else if(k==='wk'){S.cur=+a[1];S.sel=0}
  else if(k==='sel')S.sel=(S.sel===+a[1])?-1:+a[1];
  else if(k==='addact')dayS()[a[1]].push(mkA('NIL'));
  else if(k==='rmact')dayS()[a[1]].pop();
@@ -218,23 +226,21 @@ document.addEventListener('click',async function(e){var b=e.target.closest('[dat
  else if(k==='rmpm')dayS().PM=null;
  else if(k==='unlink'){var sc=cl(eff(S.cur,S.sel)),dd=dayS();dd.AM=sc.AM;dd.PM=sc.PM;dd.link=null}
  else if(k==='dup'){S.dup.forEach(function(i){if(i!==S.sel)w.days[i].link=S.sel});S.dup=[];S.status='Linked copies created (locked).'}
- else if(k==='rst'){var ac=dayS()[a[1]][+a[2]];ac.ovr=null}
- else if(k==='addstep'){var a1=dayS()[a[1]][+a[2]];a1.steps.push(mkStep());a1.ovr=null}
- else if(k==='rmstep'){var a2=dayS()[a[1]][+a[2]];a2.steps.pop();a2.ovr=null}
- else if(k==='addblock'){var a3=dayS()[a[1]][+a[2]];a3.blocks.push(mkBlock());a3.ovr=null}
- else if(k==='rmblock'){var a4=dayS()[a[1]][+a[2]];a4.blocks.splice(+a[3],1);a4.ovr=null}
- else if(k==='addwk'){S.weeks.push(cleanHidden(copyW(S.weeks[S.weeks.length-1],1+S.prog),S.weeks.length-1));S.cur=S.weeks.length-1;S.sel=fd(S.cur)}
- else if(k==='cpn'){var c=cleanHidden(copyW(w,1+S.prog),S.cur);if(S.weeks[S.cur+1])S.weeks[S.cur+1]=c;else S.weeks.push(c);S.cur++;S.status='Week '+(S.cur+1)+' is now a copy of Week '+S.cur+'. Edit it freely.'}
- else if(k==='cpa'){for(j=S.cur+1;j<3;j++){var c2=cleanHidden(copyW(S.weeks[j-1],1+S.prog),j-1);if(j<S.weeks.length)S.weeks[j]=c2;else S.weeks.push(c2)}S.status='Later weeks now follow Week '+(S.cur+1)+'.'}
- else if(k==='nb'){S.weeks.push(newWeek());S.cur=S.weeks.length-1;S.sel=fd(S.cur)}
- else if(k==='rm'){S.weeks.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);S.sel=fd(S.cur)}
+ else if(k==='rst'){var ac=actOf(a[1],a[2]);ac.ovr=null}
+ else if(k==='addpart'){var a1=actOf(a[1],a[2]);a1.parts.push(mkPart());a1.ovr=null}
+ else if(k==='rmpart'){var a2=actOf(a[1],a[2]);a2.parts.pop();a2.ovr=null}
+ else if(k==='addwk'){S.weeks.push(copyW(S.weeks[S.weeks.length-1],1+S.prog));S.cur=S.weeks.length-1;S.sel=0}
+ else if(k==='cpn'){var c=copyW(w,1+S.prog);if(S.weeks[S.cur+1])S.weeks[S.cur+1]=c;else S.weeks.push(c);S.cur++;S.status='Week '+(S.cur+1)+' is now a copy of Week '+S.cur+'. Edit it freely.'}
+ else if(k==='cpa'){for(j=S.cur+1;j<3;j++){var c2=copyW(S.weeks[j-1],1+S.prog);if(j<S.weeks.length)S.weeks[j]=c2;else S.weeks.push(c2)}S.status='Later weeks now follow Week '+(S.cur+1)+'.'}
+ else if(k==='nb'){S.weeks.push(newWeek());S.cur=S.weeks.length-1;S.sel=0}
+ else if(k==='rm'){S.weeks.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);S.sel=0}
  else if(k==='regen')S.out=null;
  else if(k==='copy'){try{await navigator.clipboard.writeText(S.out!==null?S.out:msgText(plan()));S.status='Copied.'}catch(x){S.status='Copy not available here.'}}
  else if(k==='wa'){var n=(S.phone||'').replace(/\D/g,'');if(n.length===10)n='91'+n;if(n.length<8){S.status='Add a mobile number first.'}else{window.open('https://wa.me/'+n+'?text='+encodeURIComponent(S.out!==null?S.out:msgText(plan())),'_blank');S.status='WhatsApp opened. Logging...';api({action:'log',channel:'WhatsApp'}).then(function(){S.status='WhatsApp opened and logged to your Sheet.';render()}).catch(function(x){S.status='WhatsApp opened. Not logged: '+x.message;render()})}}
  else if(k==='pdf'){S.status='Creating PDF...';api({action:'pdf',channel:'PDF'}).then(function(j){dl(j.b64,j.filename);S.status='PDF downloaded and logged.';render()}).catch(function(x){S.status='PDF failed: '+x.message;render()})}
  else if(k==='mail'){if(!S.email)S.status='Add an email address first.';else{S.status='Sending email...';api({action:'email',channel:'Email',to:S.email,subj:S.subj,cc:S.cc,body:S.body}).then(function(){S.status='Email sent to '+S.email+(S.cc?' (copy to you)':'')+' and logged.';render()}).catch(function(x){S.status='Email failed: '+x.message;render()})}}
  else if(k==='pick'){try{var r=await navigator.contacts.select(['name','tel','email'],{multiple:false});if(r.length){var c4=r[0];S.name=(c4.name&&c4.name[0])||S.name;S.phone=((c4.tel&&c4.tel[0])||'').replace(/[^\d+]/g,'');S.email=(c4.email&&c4.email[0])||S.email}}catch(x){S.status='Contact picker needs Chrome on Android, on the hosted page (not inside a preview frame).'}}
- else if(k==='reset'){if(!armed){armed=true;setTimeout(function(){armed=false;render()},3000)}else{armed=false;try{localStorage.removeItem('rp4')}catch(x){}fresh()}}
+ else if(k==='reset'){if(!armed){armed=true;setTimeout(function(){armed=false;render()},3000)}else{armed=false;try{localStorage.removeItem('rp6')}catch(x){}fresh()}}
  render();if(k==='sel'){var rr0=document.querySelector('.row.on');if(rr0)rr0.scrollIntoView({block:'start'})}});
 render();
 </script></body></html>
