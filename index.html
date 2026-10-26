@@ -85,7 +85,7 @@ function uL(u){return u==='m'?'metres':u}
 function pr(p,c,s){if(!p||p==='none'||p==='self')return null;if(p==='auto')return(s&&s===S.race&&s.autoRp)?{lo:s.autoRp,hi:s.autoRp}:null;if(p==='custom')return parseP(c);var a=String(p).split('-');return{lo:+a[0],hi:+a[1]}}
 function pT(p,c,s){if(p==='self')return' at self select pace';var r=pr(p,c,s);return r?' at '+fR(r)+'/km':''}
 function segTD(len,unit,r){var o={};if(unit==='m'||unit==='km'){var D=unit==='m'?len/1000:len;o.Dl=o.Dh=D;if(r){o.Tl=D*r.lo;o.Th=D*r.hi}}else{var T=unit==='sec'?len/60:len;o.Tl=o.Th=T;if(r){o.Dl=T/r.hi;o.Dh=T/r.lo}}return o}
-function stepInfo(s,b){var t=s.type,n,segs,line;
+function stepInfo(s,b){var t=s.type,n,segs,line;if(!(t==='RUN-WALK'?(+b.run>0&&+b.reps>0):+b.len>0))return{line:'',T:{Dl:0,Dh:0,Tl:0,Th:0,d:1,t:1},empty:true};
  if(t==='RUN-WALK'){var dm=b.seg==='Distance';n=Math.max(1,Math.round(+b.reps||1));segs=[[b.run,dm?'m':'min',pr(b.pace,b.pc,s)],[b.walk,dm?'m':'sec',pr(b.wp,b.wc,s)]];
   line='(Run '+b.run+(dm?' metres':' min')+pT(b.pace,b.pc,s)+' / Walk '+b.walk+(dm?' metres':' sec')+pT(b.wp,b.wc,s)+') x '+n}
  else if(t==='INTERVAL RUN'||t==='TEMPO RUN'){n=Math.max(1,Math.round(+b.reps||1));segs=[[b.len,b.unit,pr(b.pace,b.pc,s)]];if(n>1)segs.push([b.rV,b.rU,pr(b.rp,b.rpc,s)||{lo:b.rT==='Walk'?11:8,hi:b.rT==='Walk'?11:8}]);
@@ -113,8 +113,8 @@ function solveAuto(s){if(!s.seq.some(function(b){return b.k==='step'&&b.pace==='
  s.autoRp=null;return(lo+hi)/2}
 function parts(s){var h=s.mode==='Walk'?'Walk':(NAME[s.type]||'Run'),lines=[],net='',note='';
  if(s.mode==='Walk'){var r0=prng(s.pace,s.pc);lines.push(s.len+' '+s.unit+(r0?' at '+fR(r0)+'/km (net '+netT(s,r0)+')':''))}
- else{s.autoRp=(s===S.race)?solveAuto(s):null;var ns=0,k=0,str=false;s.seq.forEach(function(b){if(b.k==='step')ns++;else str=true});
-  s.seq.forEach(function(b){if(b.k==='step'){k++;lines.push((ns>1?'Step '+k+': ':'')+stepInfo(s,b).line)}else lines.push(strInfo(s,b).line)});
+ else{s.autoRp=(s===S.race)?solveAuto(s):null;var ns=0,k=0,str=false;s.seq.forEach(function(b){if(b.k==='step'){if(!stepInfo(s,b).empty)ns++}else str=true});
+  s.seq.forEach(function(b){if(b.k==='step'){var x0=stepInfo(s,b);if(x0.empty)return;k++;lines.push((ns>1?'Step '+k+': ':'')+x0.line)}else lines.push(strInfo(s,b).line)});
   net=netLine(totals(s,s!==S.race));if(str&&s.type!=='STRIDES')note='* Strides not included in net distance or time'}
  return{h:h,lines:lines,d:lines.join(' | '),net:net,note:note,wu:s.wu&&s.mode!=='Walk'?'Warm up : '+s.wuV+' min '+(s.wuT||'Jog').toLowerCase():'',cd:s.cd&&s.mode!=='Walk'?'Cool down : '+s.cdV+' min '+(s.cdT||'Walk').toLowerCase():''}}
 function ap(a){var t=a.t;if(t==='RUN'||t==='WALK')return parts(a);
@@ -176,15 +176,16 @@ function stepEd(s,b,i,sn,race){var t=s.type,n=Math.max(1,Math.round(+b.reps||1))
   if(n>1)h+='<div class="g3">'+F('Recovery',si('rV',b.rV,1))+F('Rec. unit',ss('rU',UN,b.rU))+F('Rec. type',ss('rT',['Jog','Walk'],b.rT))+'</div><div class="g2">'+F('Recovery pace /km',pcSel(b,'rp','rpc',b.rT==='Walk'?WP:pcOpts('rec',false)))+'<span></span></div>';
   else h+='<div class="note">'+(t==='TEMPO RUN'?'Sets 1 is one continuous tempo. More than 1 adds recovery.':'Reps above 1 adds recovery.')+'</div>'}
  else h+='<div class="g3">'+F('Length',si('len',b.len,1))+F('Unit',ss('unit',UN,b.unit))+'<span></span></div><div class="g2">'+F('Run pace /km',pcSel(b,'pace','pc',pcOpts('work',race)))+'<span></span></div>';
- var x=dtLine(stepInfo(s,b).T);h+='<div class="note"><b>Outcome: '+(x||'add a pace to see the time')+'</b></div>';
- if(sn>1&&t!=='STRIDES')h+=rmBtn(i,'Remove Step '+sn);CY='';return h+'</div>'}
+ var si0=stepInfo(s,b),x=dtLine(si0.T);h+='<div class="note"><b>'+(si0.empty?'Add a length. A step with no length is left out of the output.':'Outcome: '+(x||'add a pace to see the time'))+'</b></div>';
+ if(sn>1||t==='STRIDES')h+=rmBtn(i,'Remove Step '+sn);CY='';return h+'</div>'}
 function strEd(s,b,i){CY=' data-bk="'+i+'"';var x=strInfo(s,b),h='<div class="ac" style="margin:6px 0"><span class="fl">Strides</span><div class="g3">'+F('Length',ss('len',STRL,b.len))+F('Repeats (x)',si('reps',b.reps,1))+F('Recovery',ss('rec',STRR,b.rec))+'</div><div class="g2">'+F('Rec. type',ss('rT',['Jog','Walk'],b.rT))+F('Stride pace /km',pcSel(b,'pace','pc',pcOpts('stride',false)))+'</div>';
  h+='<div class="note"><b>'+(s.type==='STRIDES'?'Outcome: '+(dtLine(x.T)||'add a stride pace to see the outcome'):'Not counted in the session net')+'</b></div>';
  if(s.type!=='STRIDES')h+=rmBtn(i,'Remove strides');CY='';return h+'</div>'}
 function blocksEd(s,race){var h='',sn=0,ns=0,str=0,q=s.type!=='STRIDES';
  s.seq.forEach(function(b){if(b.k==='step')ns++;else str++});
  function ins(idx,lab){return(q&&str<3&&!DIS)?'<button class="sm" data-a="ins:'+CXS.sl+':'+CXS.i+':'+idx+'">+ Add strides '+lab+'</button>':''}
- if(s.seq[0].k==='step')h+=ins(0,'before Step 1');
+ if(s.seq.length&&s.seq[0].k==='step')h+=ins(0,'before Step 1');
+ if(!q&&ns===0&&!DIS)h+='<button class="sm" data-a="addfirst:'+CXS.sl+':'+CXS.i+'">+ Add Step 1</button>';
  s.seq.forEach(function(b,i){if(b.k==='step'){sn++;h+=stepEd(s,b,i,sn,race)+((!s.seq[i+1]||s.seq[i+1].k!=='str')?ins(i+1,'after Step '+sn):'')}else h+=strEd(s,b,i)});
  if(q&&ns<3&&!DIS)h+='<button class="sm" data-a="addstep:'+CXS.sl+':'+CXS.i+'">+ Add Step '+(ns+1)+'</button>';return h}
 function ed(s,race){var walk=s.mode==='Walk',h='';
@@ -262,6 +263,7 @@ document.addEventListener('click',async function(e){var b=e.target.closest('[dat
  else if(k==='unlink'){var sc=cl(eff(S.cur,S.sel)),dd=dayS();dd.AM=sc.AM;dd.PM=sc.PM;dd.link=null}
  else if(k==='dup'){S.dup.forEach(function(i){if(i!==S.sel)w.days[i].link=S.sel});S.dup=[];S.status='Linked copies created (locked).'}
  else if(k==='rst'){var ac=actOf(a[1],a[2]);ac.ovr=null}
+ else if(k==='addfirst'){var a0=actOf(a[1],a[2]);a0.seq.unshift(mkStep(a0.type));a0.ovr=null}
  else if(k==='addstep'){var a1=actOf(a[1],a[2]);a1.seq.push(mkStep(a1.type));a1.ovr=null}
  else if(k==='ins'){var a2=actOf(a[1],a[2]);a2.seq.splice(+a[3],0,mkStr());a2.ovr=null}
  else if(k==='rmb'){var a3=actOf(a[1],a[2]);a3.seq.splice(+a[3],1);a3.ovr=null}
